@@ -27,3 +27,6 @@ cohere>=4.47.0
 
 # Data Validation (optional but recommended)
 pydantic>=2.5.0
+
+# Graph RAG Dependencies
+graphiti-core>=0.1.0  # Knowledge graph construction with LLM-driven extraction

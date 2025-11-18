@@ -184,6 +184,81 @@ class RetrievalConfig:
 
 
 @dataclass
+class GraphRAGConfig:
+    """Graph RAG configuration for knowledge graph operations.
+
+    This configuration is separate from RAGConfig and used only when
+    initializing GraphRAGClient for knowledge graph-based retrieval.
+    """
+
+    neo4j_uri: str = "bolt://localhost:7687"
+    neo4j_user: str = "neo4j"
+    neo4j_password: str = ""
+    neo4j_database: str = "insta_rag_graph"
+    llm_model: str = "gpt-4"
+    embedding_model: str = "text-embedding-3-large"
+    enabled: bool = True
+    group_id: str = "insta_rag"
+
+    def validate(self) -> None:
+        """Validate Graph RAG configuration."""
+        if not self.neo4j_uri:
+            raise ConfigurationError("Neo4j URI is required for Graph RAG")
+        if not self.neo4j_user:
+            raise ConfigurationError("Neo4j user is required for Graph RAG")
+        if not self.neo4j_password:
+            raise ConfigurationError("Neo4j password is required for Graph RAG")
+
+    @classmethod
+    def from_env(cls, **kwargs) -> "GraphRAGConfig":
+        """Create Graph RAG configuration from environment variables.
+
+        Environment variables:
+            NEO4J_URI: Neo4j Bolt URI
+            NEO4J_USER: Neo4j username
+            NEO4J_PASSWORD: Neo4j password
+            NEO4J_DATABASE: Neo4j database name
+            GRAPHITI_LLM_MODEL: LLM model for entity extraction
+            GRAPHITI_EMBEDDING_MODEL: Embedding model
+
+        Args:
+            **kwargs: Override specific configuration values
+
+        Returns:
+            GraphRAGConfig instance
+        """
+        config = cls(
+            neo4j_uri=os.getenv("NEO4J_URI", "bolt://localhost:7687"),
+            neo4j_user=os.getenv("NEO4J_USER", "neo4j"),
+            neo4j_password=os.getenv("NEO4J_PASSWORD", ""),
+            neo4j_database=os.getenv("NEO4J_DATABASE", "insta_rag_graph"),
+            llm_model=os.getenv("GRAPHITI_LLM_MODEL", "gpt-4"),
+            embedding_model=os.getenv(
+                "GRAPHITI_EMBEDDING_MODEL", "text-embedding-3-large"
+            ),
+            group_id=os.getenv("GRAPHITI_GROUP_ID", "insta_rag"),
+        )
+
+        # Apply any overrides from kwargs
+        for key, value in kwargs.items():
+            if hasattr(config, key):
+                setattr(config, key, value)
+
+        return config
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert configuration to dictionary (without sensitive data)."""
+        return {
+            "neo4j_uri": self.neo4j_uri,
+            "neo4j_database": self.neo4j_database,
+            "llm_model": self.llm_model,
+            "embedding_model": self.embedding_model,
+            "enabled": self.enabled,
+            "group_id": self.group_id,
+        }
+
+
+@dataclass
 class RAGConfig:
     """Main RAG system configuration."""
 

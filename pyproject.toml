@@ -7,7 +7,7 @@ authors = [
     { name = "Tahmidul Islam", email = "me@tahmidul612.com" },
     { name = "MD Ikramul Kayes", email = "ikramul.kayesgg@gmail.com" },
 ]
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 readme = "README.md"
 license = "MIT"
 keywords = ["rag", "retrieval-augmented-generation", "llm", "ai", "nlp"]
@@ -16,7 +16,6 @@ classifiers = [
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
     "Operating System :: OS Independent",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -39,6 +38,7 @@ dependencies = [
     "pydantic>=2.5.0",
     "requests>=2.32.5",
     "rank-bm25>=0.2.2",
+    "graphiti-core>=0.1.0",
 ]
 
 [project.urls]
@@ -85,8 +85,8 @@ exclude = [
 line-length = 88
 indent-width = 4
 
-# Assume Python 3.9
-target-version = "py39"
+# Assume Python 3.10
+target-version = "py310"
 
 [tool.ruff.lint]
 # Enable Pyflakes (`F`) and a subset of the pycodestyle (`E`) codes by default.
