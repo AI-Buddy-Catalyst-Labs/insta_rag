@@ -73,7 +73,7 @@ async def example_graph_rag_only():
             depth=2,
         )
 
-        print(f"\nContext for 'Alice':")
+        print("\nContext for 'Alice':")
         for edge in context_result.edges[:5]:
             print(f"  - {edge.fact}")
 

@@ -1,11 +1,11 @@
 """Graph retriever for searching knowledge graphs."""
 
 import time
-from typing import List, Optional
+from typing import Optional
 
 from graphiti_core import Graphiti
 
-from .models import GraphEdge, GraphNode, GraphRetrievalResult
+from .models import GraphEdge, GraphRetrievalResult
 
 
 class GraphRetriever:
