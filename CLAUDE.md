@@ -462,7 +462,33 @@ Note: Pre-commit hooks automatically manage `uv.lock` and `requirements.txt`.
 
 ## Roadmap & Known Limitations
 
-- Roadmap items: built-in summarization, more rerankers, CLI GA, LangChain/LlamaIndex adapters, streaming/tracing hooks
-- Currently beta status – API may change before v1.0
+### Implemented Features
+- ✅ **Vector RAG** – Semantic chunking, hybrid retrieval, HyDE, reranking
+- ✅ **Graph RAG** – Knowledge graph-based retrieval with Neo4j and Graphiti (Phase 1)
+- ✅ **Hybrid Storage** – Qdrant for vectors, MongoDB for content
+
+### Roadmap (Phase 2+)
+- Graph RAG scoring – Implement semantic similarity + BM25 scoring for edges
+- Hybrid retrieval merging – Combine graph + vector results intelligently
+- Built-in summarization – Answer synthesis from retrieved chunks
+- More rerankers – Additional SOTA reranker integrations
+- CLI GA – General availability of command-line interface
+- LangChain/LlamaIndex adapters – Deep integration with popular frameworks
+- Streaming/tracing hooks – OpenTelemetry support, real-time monitoring
+
+### Known Limitations
+
+#### Vector RAG
 - Reranking is optional but recommended for long-tail queries
 - Vector DB integration focuses on Qdrant (extensible for others)
+
+#### Graph RAG
+- **Phase 1 limitation** – Edge scoring currently returns 0.0; Phase 2 will implement semantic similarity + BM25 scoring
+- **Async-only** – GraphRAGClient must be used with async/await
+- **No collection deletion** – Neo4j doesn't support collection-level deletion via Graphiti API
+- **Episode-based organization** – Graph data organized by document source; requires explicit management
+- **LLM cost** – Entity extraction incurs LLM API calls; consider batching large documents
+
+### General
+- Currently beta status – API may change before v1.0
+- Schema RAG (pure graph-only, no vector components) not yet supported

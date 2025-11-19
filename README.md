@@ -19,6 +19,7 @@ Insta RAG (a.k.a. **insta_rag**) is a **modular, configuration‑driven** Python
 - **Reranking** → optional integration with SOTA rerankers (e.g., Cohere) to reorder results.
 - **Pluggable by Design** → swap chunkers, embedders, rerankers, and vector DBs.
 - **Hybrid Storage** → keep **Qdrant** lean for vectors and use **MongoDB** for cheap, flexible content storage.
+- **Graph RAG** *(NEW)* → Knowledge graph-based retrieval using **Neo4j** and **Graphiti** for structured entity/relationship extraction and discovery.
 
 ---
 
@@ -29,9 +30,10 @@ Insta RAG (a.k.a. **insta_rag**) is a **modular, configuration‑driven** Python
 - [Concepts](#concepts)
 - [Configuration](#configuration)
 - [Core API](#core-api)
-- [Convenience “Rack” API](#convenience-rack-api)
+- [Convenience "Rack" API](#convenience-rack-api)
 - [Decorators (syntactic sugar)](#decorators-syntactic-sugar)
 - [Advanced Retrieval Recipes](#advanced-retrieval-recipes)
+- [Graph RAG (NEW)](#graph-rag-new)
 - [FastAPI Example](#fastapi-example)
 - [CLI (preview)](#cli-preview)
 - [Guides & Docs](#guides--docs)
@@ -270,6 +272,140 @@ resp = client.retrieve(
 
 ---
 
+## Graph RAG (NEW)
+
+**Graph RAG** extracts entities and relationships from documents to build a **knowledge graph** in Neo4j. Perfect for discovering connections, understanding context, and answering relationship-based questions.
+
+### When to Use Graph RAG
+
+- Complex knowledge with many interconnected entities (e.g., organizations, people, locations)
+- Need explicit entity/relationship extraction and discovery
+- Temporal awareness (when facts became relevant or expired)
+- Natural language queries like "Who works at X?" or "What are Y's relationships?"
+
+### Quick Start with Graph RAG
+
+#### 1) Configure Neo4j
+
+Add to `.env`:
+
+```dotenv
+# Neo4j Graph Database
+NEO4J_URI=bolt://localhost:7687
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=your_password
+NEO4J_DATABASE=neo4j
+
+# Graphiti (Entity Extraction)
+GRAPHITI_LLM_MODEL=gpt-4.1
+GRAPHITI_EMBEDDING_MODEL=text-embedding-3-large
+```
+
+#### 2) Basic Usage
+
+```python
+import asyncio
+from insta_rag.graph_rag import GraphRAGClient
+from insta_rag import DocumentInput
+
+async def main():
+    # Initialize Graph RAG (async-only)
+    client = GraphRAGClient()
+    await client.initialize()
+
+    try:
+        # Add documents and extract entities/relationships
+        docs = [
+            DocumentInput.from_text("Alice works at TechCorp as a Senior Engineer"),
+            DocumentInput.from_text("TechCorp builds AI products for enterprises"),
+        ]
+
+        results = await client.add_documents(
+            docs,
+            collection_name="company_knowledge"
+        )
+        print(f"✓ Extracted {results[0].nodes_created} entities, {results[0].edges_created} relationships")
+
+        # Query the knowledge graph
+        retrieval = await client.retrieve(
+            query="Who works at TechCorp?",
+            collection_name="company_knowledge",
+            k=10
+        )
+
+        print(f"\n📊 Found {len(retrieval.edges)} facts:")
+        for fact in retrieval.edges:
+            print(f"  • {fact.fact}")
+
+    finally:
+        await client.close()
+
+asyncio.run(main())
+```
+
+#### 3) Using as Context Manager
+
+```python
+async with GraphRAGClient() as client:
+    # Automatically handles initialization and cleanup
+    results = await client.add_documents(docs, "knowledge")
+    retrieval = await client.retrieve("query", "knowledge", k=5)
+```
+
+#### 4) Combining Vector RAG + Graph RAG
+
+```python
+from insta_rag import RAGClient, RAGConfig
+from insta_rag.graph_rag import GraphRAGClient
+
+async def hybrid_retrieval():
+    # Both systems can coexist independently
+    vector_client = RAGClient(RAGConfig.from_env())  # Sync
+
+    async with GraphRAGClient() as graph_client:  # Async
+        # Vector search for semantic similarity
+        vector_results = vector_client.retrieve(
+            query="AI products",
+            collection_name="docs",
+            k=10
+        )
+
+        # Graph search for relationships
+        graph_results = await graph_client.retrieve(
+            query="Who works at TechCorp?",
+            collection_name="company",
+            k=10
+        )
+
+        # Combine insights
+        print(f"Vector results: {len(vector_results.chunks)} chunks")
+        print(f"Graph results: {len(graph_results.edges)} facts")
+```
+
+### Graph RAG API Reference
+
+| Method | Purpose |
+|--------|---------|
+| `await client.initialize()` | Connect to Neo4j and setup indices |
+| `await client.add_documents(docs, collection_name)` | Extract entities/relationships and add to graph |
+| `await client.retrieve(query, collection_name, k)` | Search graph using hybrid semantic + BM25 |
+| `await client.retrieve_with_reranking(query, collection_name, center_node)` | Retrieve with distance-based reranking from center node |
+| `await client.get_entity_context(entity_name, collection_name, depth)` | Get entity and related facts (up to depth levels) |
+| `await client.close()` | Cleanup Neo4j connection |
+
+### Graph RAG vs Vector RAG
+
+| Aspect | Vector RAG | Graph RAG |
+|--------|-----------|-----------|
+| **Storage** | Qdrant vectors | Neo4j graph database |
+| **Client** | `RAGClient` (sync) | `GraphRAGClient` (async) |
+| **Retrieval** | Semantic similarity | Fact/relationship queries |
+| **Entity Extraction** | Not explicit | LLM-driven, explicit |
+| **Use Cases** | General similarity search | Structured knowledge discovery |
+| **Best For** | Content search | Relationship queries |
+
+---
+
 ## FastAPI Example
 
 ```python
@@ -339,6 +475,14 @@ We welcome contributions! Please check out the **Contributing Guide** for:
 
 ## Roadmap
 
+### Implemented
+- [x] **Graph RAG** – Knowledge graph-based retrieval with Neo4j and Graphiti
+- [x] **Hybrid Storage** – Qdrant vectors + MongoDB content
+- [x] **Hybrid Retrieval** – Semantic + BM25 search
+- [x] **HyDE & Reranking** – Query transformation and SOTA reranking
+
+### Coming Soon (Phase 2+)
+- [ ] Graph RAG Scoring – Semantic similarity + BM25 for edges
 - [ ] Built‑in summarization & answer synthesis helpers
 - [ ] More rerankers (open‑source options)
 - [ ] CLI GA
