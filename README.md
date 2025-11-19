@@ -384,3 +384,4 @@ This project is licensed under the [MIT License](https://github.com/AI-Buddy-Cat
 
 Insta RAG packages the **most effective, modern RAG techniques** into a clean DX. You focus on your product; we keep the rack updated as the ecosystem evolves.
 lets rock
+
