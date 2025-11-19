@@ -95,8 +95,12 @@ class GraphRAGClient:
         azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
         azure_api_key = os.getenv("AZURE_OPENAI_API_KEY")
         # Try both environment variable names for backward compatibility
-        azure_embedding_deployment = os.getenv("AZURE_EMBEDDING_DEPLOYMENT") or os.getenv("EMBEDDING_DEPLOYMENT", "text-embedding-3-large")
-        azure_llm_deployment = os.getenv("AZURE_LLM_DEPLOYMENT") or os.getenv("GRAPHITI_LLM_MODEL", "gpt-4.1")
+        azure_embedding_deployment = os.getenv(
+            "AZURE_EMBEDDING_DEPLOYMENT"
+        ) or os.getenv("EMBEDDING_DEPLOYMENT", "text-embedding-3-large")
+        azure_llm_deployment = os.getenv("AZURE_LLM_DEPLOYMENT") or os.getenv(
+            "GRAPHITI_LLM_MODEL", "gpt-4.1"
+        )
 
         # If credentials not set, return None (Graphiti will use defaults)
         if not azure_endpoint or not azure_api_key:

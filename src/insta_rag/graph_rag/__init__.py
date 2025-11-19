@@ -10,6 +10,7 @@ Example:
     from insta_rag.graph_rag import GraphRAGClient, GraphAddResult
     from insta_rag import DocumentInput
 
+
     async def main():
         # Initialize Graph RAG client (separate from regular RAGClient)
         client = GraphRAGClient()
@@ -24,9 +25,7 @@ Example:
 
         # Retrieve from knowledge graph
         result = await client.retrieve(
-            query="What does Alice do?",
-            collection_name="company_info",
-            k=5
+            query="What does Alice do?", collection_name="company_info", k=5
         )
 
         print(f"Found {len(result.edges)} facts")
@@ -34,6 +33,7 @@ Example:
             print(f"  - {edge.fact}")
 
         await client.close()
+
 
     asyncio.run(main())
     ```

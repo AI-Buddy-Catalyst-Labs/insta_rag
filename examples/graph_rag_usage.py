@@ -41,9 +41,7 @@ async def example_graph_rag_only():
         ]
 
         print("\n📚 Adding documents to knowledge graph...")
-        results = await graph_client.add_documents(
-            docs, collection_name="company_info"
-        )
+        results = await graph_client.add_documents(docs, collection_name="company_info")
 
         for i, result in enumerate(results, 1):
             print(f"\nDocument {i}:")
@@ -182,9 +180,7 @@ async def example_combined_usage():
 
         # Vector retrieval
         print("\n  Vector RAG Results:")
-        vector_result = rag_client.retrieve(
-            query=query, collection_name="company", k=5
-        )
+        vector_result = rag_client.retrieve(query=query, collection_name="company", k=5)
         for chunk in vector_result.chunks[:3]:
             print(f"    - {chunk.content[:80]}... (score: {chunk.score:.3f})")
 

@@ -118,7 +118,9 @@ class GraphBuilder:
 
         processing_time_ms = (time.time() - start_time) * 1000
 
-        return self._convert_episode_result(episode_result, group_id, processing_time_ms)
+        return self._convert_episode_result(
+            episode_result, group_id, processing_time_ms
+        )
 
     def _extract_content(self, document: DocumentInput) -> str:
         """Extract text content from document based on source type.
