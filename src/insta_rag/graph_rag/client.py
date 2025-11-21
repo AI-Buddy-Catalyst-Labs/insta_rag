@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from typing import Any, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from openai import AsyncOpenAI
 
@@ -206,6 +206,133 @@ class GraphRAGClient:
             raise RuntimeError("Client not initialized. Call initialize() first.")
 
         return await self._builder.add_chunk(chunk, collection_name)
+
+    # ======================== Async Task Submission (Non-blocking) ========================
+
+    def submit_add_documents_async(
+        self,
+        documents: List[DocumentInput],
+        collection_name: str = "default",
+        neo4j_uri: Optional[str] = None,
+        neo4j_user: Optional[str] = None,
+        neo4j_password: Optional[str] = None,
+        neo4j_database: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Submit documents for async ingestion via Celery (non-blocking).
+
+        This method immediately returns a task ID without waiting for the documents
+        to be processed. Use the task monitoring service to track progress and retrieve results.
+
+        Args:
+            documents: List of DocumentInput objects to add
+            collection_name: Name of collection to add to (default: 'default')
+            neo4j_uri: Neo4j URI (optional, uses env var if not provided)
+            neo4j_user: Neo4j username (optional, uses env var if not provided)
+            neo4j_password: Neo4j password (optional, uses env var if not provided)
+            neo4j_database: Neo4j database name (optional, uses env var if not provided)
+
+        Returns:
+            Dict with keys:
+                - 'task_id': Celery task ID for tracking
+                - 'status': 'submitted'
+                - 'message': Task submission details
+                - 'collection_name': The collection name
+                - 'num_documents': Number of documents submitted
+
+        Raises:
+            ValueError: If documents list is empty
+            ImportError: If Celery is not configured
+
+        Example:
+            >>> documents = [DocumentInput.from_text("..."), ...]
+            >>> result = client.submit_add_documents_async(documents, "my_collection")
+            >>> task_id = result['task_id']
+            >>> # Later, check status:
+            >>> from insta_rag.task_monitoring import get_task_monitoring
+            >>> monitor = get_task_monitoring()
+            >>> status = monitor.get_task_status(task_id)
+        """
+        if not documents:
+            raise ValueError("documents list cannot be empty")
+
+        try:
+            from insta_rag.tasks.graph_rag_tasks import add_documents_task
+        except ImportError:
+            raise ImportError(
+                "Celery is required for async document submission. "
+                "Install with: pip install celery redis"
+            )
+
+        # Convert DocumentInput objects to dicts for serialization
+        documents_data = []
+        for doc in documents:
+            doc_dict = {
+                "source": doc.source,
+                "source_type": doc.source_type.value,
+                "metadata": doc.metadata or {},
+            }
+            documents_data.append(doc_dict)
+
+        # Submit task to Celery
+        celery_result = add_documents_task.apply_async(
+            args=[documents_data, collection_name],
+            kwargs={
+                "neo4j_uri": neo4j_uri,
+                "neo4j_user": neo4j_user,
+                "neo4j_password": neo4j_password,
+                "neo4j_database": neo4j_database,
+                "group_id": self.group_id,
+            },
+            queue="default",
+        )
+
+        return {
+            "task_id": celery_result.id,
+            "status": "submitted",
+            "message": f"Document ingestion task submitted for {len(documents)} documents",
+            "collection_name": collection_name,
+            "num_documents": len(documents),
+        }
+
+    def submit_add_chunk_async(
+        self,
+        chunk: Chunk,
+        collection_name: str = "default",
+        neo4j_uri: Optional[str] = None,
+        neo4j_user: Optional[str] = None,
+        neo4j_password: Optional[str] = None,
+        neo4j_database: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Submit a chunk for async ingestion via Celery (non-blocking).
+
+        Args:
+            chunk: Chunk object to add
+            collection_name: Name of collection to add to (default: 'default')
+            neo4j_uri: Neo4j URI (optional)
+            neo4j_user: Neo4j username (optional)
+            neo4j_password: Neo4j password (optional)
+            neo4j_database: Neo4j database name (optional)
+
+        Returns:
+            Dict with task submission details (see submit_add_documents_async)
+
+        Raises:
+            ImportError: If Celery is not configured
+        """
+        # Convert chunk to DocumentInput
+        doc = DocumentInput.from_text(chunk.content)
+        if chunk.metadata:
+            doc.metadata = chunk.metadata.to_dict() if hasattr(chunk.metadata, 'to_dict') else dict(chunk.metadata)
+
+        # Use the documents submission method
+        return self.submit_add_documents_async(
+            documents=[doc],
+            collection_name=collection_name,
+            neo4j_uri=neo4j_uri,
+            neo4j_user=neo4j_user,
+            neo4j_password=neo4j_password,
+            neo4j_database=neo4j_database,
+        )
 
     # ======================== Retrieval Operations ========================
 

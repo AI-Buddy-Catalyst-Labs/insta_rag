@@ -259,6 +259,92 @@ class GraphRAGConfig:
 
 
 @dataclass
+class CeleryConfig:
+    """Celery configuration for async task processing.
+
+    Used for configuring background task queue for document ingestion
+    and other long-running operations via Celery with Redis broker.
+
+    IMPORTANT: Redis credentials must come from environment variables:
+    - CELERY_BROKER_URL: Set to your Redis broker URL
+    - CELERY_RESULT_BACKEND: Set to your Redis result backend URL
+
+    These are REQUIRED and cannot be None.
+    """
+
+    broker_url: Optional[str] = None
+    result_backend: Optional[str] = None
+    enabled: bool = True
+    task_serializer: str = "json"
+    result_serializer: str = "json"
+    task_track_started: bool = True
+    task_time_limit: int = 3600  # 1 hour
+    task_soft_time_limit: int = 3300  # 55 minutes
+    worker_prefetch_multiplier: int = 1
+    worker_max_tasks_per_child: int = 1000
+    result_expires: int = 86400  # 24 hours
+
+    def validate(self) -> None:
+        """Validate Celery configuration."""
+        if not self.broker_url:
+            raise ConfigurationError("Celery broker URL is required")
+        if not self.result_backend:
+            raise ConfigurationError("Celery result backend URL is required")
+
+    @classmethod
+    def from_env(cls, **kwargs) -> "CeleryConfig":
+        """Create Celery configuration from environment variables.
+
+        Environment variables:
+            CELERY_BROKER_URL: Redis broker URL
+            CELERY_RESULT_BACKEND: Redis result backend URL
+            CELERY_ENABLED: Enable/disable Celery (default: True)
+            CELERY_TASK_TIME_LIMIT: Task hard time limit in seconds
+            CELERY_TASK_SOFT_TIME_LIMIT: Task soft time limit in seconds
+
+        Args:
+            **kwargs: Override specific configuration values
+
+        Returns:
+            CeleryConfig instance
+        """
+        config = cls(
+            broker_url=os.getenv(
+                "CELERY_BROKER_URL",
+               
+            ),
+            result_backend=os.getenv(
+                "CELERY_RESULT_BACKEND",
+              
+            ),
+            enabled=os.getenv("CELERY_ENABLED", "true").lower() == "true",
+            task_time_limit=int(os.getenv("CELERY_TASK_TIME_LIMIT", "3600")),
+            task_soft_time_limit=int(os.getenv("CELERY_TASK_SOFT_TIME_LIMIT", "3300")),
+        )
+
+        # Apply any overrides from kwargs
+        for key, value in kwargs.items():
+            if hasattr(config, key):
+                setattr(config, key, value)
+
+        return config
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert configuration to dictionary (without sensitive data)."""
+        return {
+            "enabled": self.enabled,
+            "task_serializer": self.task_serializer,
+            "result_serializer": self.result_serializer,
+            "task_track_started": self.task_track_started,
+            "task_time_limit": self.task_time_limit,
+            "task_soft_time_limit": self.task_soft_time_limit,
+            "worker_prefetch_multiplier": self.worker_prefetch_multiplier,
+            "worker_max_tasks_per_child": self.worker_max_tasks_per_child,
+            "result_expires": self.result_expires,
+        }
+
+
+@dataclass
 class RAGConfig:
     """Main RAG system configuration."""
 
