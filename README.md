@@ -406,6 +406,173 @@ async def hybrid_retrieval():
 
 ---
 
+## Async Document Processing (NEW)
+
+**Async Processing with Celery** allows you to submit documents for Graph RAG processing without blocking your API, enabling horizontal scaling and better resource management.
+
+### When to Use Async Processing
+
+- Processing large documents that take long to extract entities/relationships
+- Building responsive APIs that should return immediately with task IDs
+- Scaling horizontally with multiple workers
+- Monitoring task progress in real-time
+- Retrying failed tasks automatically
+
+### Quick Start with Celery
+
+#### 1) Configure Redis
+
+Add to `.env`:
+
+```dotenv
+# Redis Configuration (for Celery async task processing)
+CELERY_BROKER_URL=redis://default:your_password@your_host:6379/0
+CELERY_RESULT_BACKEND=redis://default:your_password@your_host:6379/1
+```
+
+#### 2) Start Workers
+
+```bash
+# Single worker with 4 concurrent tasks
+celery -A insta_rag.celery_app worker -l debug -Q default -c 4
+
+# Or use the library function to start multiple workers
+python3 -c "from insta_rag import start_worker_pool; start_worker_pool(num_workers=2, concurrency_per_worker=4)"
+```
+
+#### 3) Submit Documents Asynchronously
+
+```python
+import asyncio
+from insta_rag.graph_rag import GraphRAGClient
+from insta_rag import DocumentInput
+
+async def main():
+    async with GraphRAGClient() as client:
+        await client.initialize()
+
+        docs = [DocumentInput.from_text("Alice works at TechCorp")]
+
+        # Submit without waiting (returns immediately with task_id)
+        task_id = await client.submit_add_documents_async(
+            docs,
+            collection_name="company"
+        )
+
+        print(f"Task submitted: {task_id}")
+
+        # Check status anytime
+        from insta_rag.task_monitoring import get_task_monitoring
+        monitor = get_task_monitoring()
+        status = monitor.get_task_status(task_id)
+
+        print(f"Task status: {status}")  # PENDING, STARTED, SUCCESS, or FAILURE
+
+asyncio.run(main())
+```
+
+#### 4) Monitor Tasks
+
+```python
+from insta_rag.task_monitoring import get_task_monitoring
+
+monitor = get_task_monitoring()
+
+# Get task status
+status = monitor.get_task_status(task_id)
+
+# Get task result (when complete)
+if status == "SUCCESS":
+    result = monitor.get_task_result(task_id)
+    print(result)
+
+# Get queue depth
+queue_length = monitor.get_queue_length()
+print(f"Pending tasks: {queue_length}")
+```
+
+#### 5) Scale Workers Horizontally
+
+```python
+from insta_rag import scale_pool, get_pool_status, auto_scale_if_needed
+
+# Scale to specific number
+scale_pool(target_workers=4)
+
+# Get pool status
+status = get_pool_status()
+print(f"Active workers: {status['active_workers']}")
+
+# Auto-scale based on queue depth
+auto_scale_if_needed(queue_depth_threshold=10, min_workers=1, max_workers=8)
+```
+
+### FastAPI Integration
+
+```python
+from fastapi import FastAPI
+from insta_rag import start_worker_pool, stop_worker_pool, DocumentInput
+from insta_rag.graph_rag import GraphRAGClient
+from insta_rag.task_monitoring import get_task_monitoring
+
+app = FastAPI()
+
+@app.on_event("startup")
+async def startup():
+    # Auto-start worker pool
+    start_worker_pool(num_workers=2, concurrency_per_worker=4)
+
+@app.on_event("shutdown")
+async def shutdown():
+    # Auto-stop worker pool
+    stop_worker_pool()
+
+@app.post("/graph-rag/add-documents")
+async def add_documents(documents: list[DocumentInput]):
+    """Submit documents for async processing (non-blocking)."""
+    async with GraphRAGClient() as client:
+        await client.initialize()
+        task_id = await client.submit_add_documents_async(
+            documents,
+            collection_name="documents"
+        )
+
+    return {"task_id": task_id, "status": "submitted"}
+
+@app.get("/tasks/{task_id}")
+async def get_task_status(task_id: str):
+    """Get status and results of a task."""
+    monitor = get_task_monitoring()
+    status = monitor.get_task_status(task_id)
+
+    response = {"task_id": task_id, "status": status}
+
+    if status == "SUCCESS":
+        response["result"] = monitor.get_task_result(task_id)
+
+    return response
+```
+
+### Architecture
+
+```
+Document Submission (FastAPI)
+         ↓
+    Celery Task Queue (Redis)
+         ↓
+    Workers (multiple processes)
+         ↓
+    Graph RAG Processing
+         ↓
+    Results stored in Redis
+         ↓
+    Task Status Polling (FastAPI)
+         ↓
+    Results Retrieved
+```
+
+---
+
 ## FastAPI Example
 
 ```python
@@ -480,6 +647,7 @@ We welcome contributions! Please check out the **Contributing Guide** for:
 - [x] **Hybrid Storage** – Qdrant vectors + MongoDB content
 - [x] **Hybrid Retrieval** – Semantic + BM25 search
 - [x] **HyDE & Reranking** – Query transformation and SOTA reranking
+- [x] **Async Processing** – Celery + Redis for non-blocking document ingestion and horizontal scaling
 
 ### Coming Soon (Phase 2+)
 - [ ] Graph RAG Scoring – Semantic similarity + BM25 for edges
@@ -489,6 +657,8 @@ We welcome contributions! Please check out the **Contributing Guide** for:
 - [ ] LangChain/LlamaIndex adapters
 - [ ] Streaming & tracing hooks (OpenTelemetry)
 - [ ] Native PDF/HTML loaders with auto‑chunk profiles
+- [ ] Task persistence and recovery
+- [ ] Advanced scheduling and cron job support
 
 ---
 

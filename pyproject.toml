@@ -1,6 +1,6 @@
 [project]
 name = "insta_rag"
-version = "0.1.1-beta.4"
+version = "0.1.1-beta.5"
 description = "A RAG (Retrieval-Augmented Generation) library for document processing and retrieval."
 authors = [
     { name = "Aukik Aurnab", email = "aukikaurnabx@gmail.com" },
@@ -39,6 +39,10 @@ dependencies = [
     "requests>=2.32.5",
     "rank-bm25>=0.2.2",
     "graphiti-core>=0.1.0",
+    "celery>=5.3.0",
+    "redis>=4.5.0",
+    "httpcore>=1.0.0",
+    "httpx>=0.24.0",
 ]
 
 [project.urls]
