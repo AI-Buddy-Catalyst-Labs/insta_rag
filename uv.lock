@@ -923,7 +923,7 @@ wheels = [
 
 [[package]]
 name = "insta-rag"
-version = "0.1.1b4"
+version = "0.1.1b5"
 source = { editable = "." }
 dependencies = [
     { name = "celery" },
