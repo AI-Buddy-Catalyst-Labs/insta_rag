@@ -279,10 +279,9 @@ Documents → Extract Content → Graphiti Processing → Neo4j Graph
 ### Important Limitations & Notes
 
 1. **Async-only** – GraphRAGClient uses async/await exclusively
-2. **No collection deletion** – Neo4j doesn't support collection-level deletion via Graphiti; use raw Neo4j queries if needed
-3. **Episode-based organization** – Graph data is organized as episodes (document sources); explicit management required
-4. **LLM cost** – Entity extraction uses LLM calls; consider batching for large documents
-5. **Phase 1 feature** – Hybrid retrieval (merging graph + vector results) is planned for Phase 2
+2. **Episode-based organization** – Graph data is organized as episodes (document sources); explicit management required
+3. **LLM cost** – Entity extraction uses LLM calls; consider batching for large documents
+4. **Phase 1 feature** – Hybrid retrieval (merging graph + vector results) is planned for Phase 2
 
 ### Custom Group ID for Multi-Tenant & Environment Isolation
 
@@ -345,6 +344,78 @@ POST /graph-rag/retrieve
 **See also:**
 - [GRAPH_RAG_GROUP_ID_GUIDE.md](./GRAPH_RAG_GROUP_ID_GUIDE.md) – Comprehensive guide with examples
 - [GRAPH_RAG_INTEGRATION_GUIDE.md](./GRAPH_RAG_INTEGRATION_GUIDE.md) – Multi-tenant implementation patterns
+
+### Graph RAG Delete Operations (NEW)
+
+Delete functionality has been fully implemented for Graph RAG with support for deleting at multiple levels:
+
+#### Deletion Methods
+
+1. **Delete Node (Entity)**
+   ```python
+   result = await client.delete_node(node_uuid, collection_name)
+   # Deletes single entity and all connected relationships
+   ```
+
+2. **Delete Edge (Relationship/Fact)**
+   ```python
+   result = await client.delete_edge(edge_uuid, collection_name)
+   # Deletes single relationship without affecting entities
+   ```
+
+3. **Delete Episode (Document)**
+   ```python
+   result = await client.delete_episode(episode_uuid, collection_name)
+   # Deletes all entities/relationships from document
+   # Automatically removes orphaned nodes (no remaining connections)
+   ```
+
+4. **Delete Collection**
+   ```python
+   result = await client.delete_collection(collection_name)
+   # Deletes ALL data in collection (irreversible)
+   # Requires explicit confirmation to prevent accidents
+   ```
+
+#### Implementation Details
+
+- **Files Modified:**
+  - `src/insta_rag/graph_rag/graph_builder.py` – Core deletion logic
+  - `src/insta_rag/graph_rag/client.py` – Client API wrappers
+  - `src/insta_rag/graph_rag/neo4j_driver.py` – Driver reference storage
+  - `testing_api/graph_rag_routes.py` – API endpoints (4 new + 1 demo endpoint)
+
+- **API Endpoints:**
+  - `POST /graph-rag/delete-node` – Delete entity
+  - `POST /graph-rag/delete-edge` – Delete relationship
+  - `POST /graph-rag/delete-episode` – Delete document
+  - `POST /graph-rag/delete-collection` – Delete collection (requires confirmation)
+  - `POST /graph-rag/test/demo-delete` – Interactive demo
+
+- **Key Features:**
+  - Multi-tenant safe via group_id isolation
+  - Orphan node cleanup automatically after episode deletion
+  - Error handling with descriptive messages
+  - Confirmation required for collection deletion
+  - Full Swagger documentation with examples
+
+#### Response Format
+
+All delete endpoints return:
+```json
+{
+  "success": true,
+  "message": "Deletion status message",
+  "deleted_items": {
+    "uuid": "...",
+    "count": 0
+  },
+  "error": null
+}
+```
+
+**See also:**
+- [GRAPH_RAG_DELETE_EPISODES.md](./GRAPH_RAG_DELETE_EPISODES.md) – Comprehensive deletion guide with examples
 
 ## Async Processing & Celery (NEW)
 
