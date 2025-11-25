@@ -149,7 +149,13 @@ class GraphRAGClient:
             RuntimeError: If initialization fails
         """
         self._graphiti = await self.driver.initialize()
-        self._builder = GraphBuilder(self._graphiti, self.group_id)
+        # Pass the Neo4j driver to GraphBuilder for raw query execution (needed for deletion)
+        neo4j_driver = self.driver.get_neo4j_driver()
+        self._builder = GraphBuilder(
+            self._graphiti,
+            self.group_id,
+            neo4j_driver=neo4j_driver
+        )
         self._retriever = GraphRetriever(self._graphiti, self.group_id)
         return self
 
@@ -430,6 +436,138 @@ class GraphRAGClient:
             collection_name=collection_name,
             depth=depth,
         )
+
+    # ======================== Delete Operations ========================
+
+    async def delete_node(
+        self,
+        node_uuid: str,
+        collection_name: str = "default",
+    ) -> dict:
+        """Delete an entity node from the knowledge graph.
+
+        Removes the specified entity and all its connected relationships.
+
+        Args:
+            node_uuid: UUID of the entity node to delete
+            collection_name: Collection context
+
+        Returns:
+            Dict with deletion result:
+                - success: bool
+                - node_uuid: The deleted node UUID
+                - edges_deleted: Number of connected edges removed
+                - error: Optional error message
+
+        Raises:
+            RuntimeError: If not initialized
+            ValueError: If node_uuid is invalid
+        """
+        if not self._builder:
+            raise RuntimeError("Client not initialized. Call initialize() first.")
+
+        if not node_uuid or not isinstance(node_uuid, str):
+            raise ValueError("node_uuid must be a non-empty string")
+
+        return await self._builder.delete_node(node_uuid, collection_name)
+
+    async def delete_edge(
+        self,
+        edge_uuid: str,
+        collection_name: str = "default",
+    ) -> dict:
+        """Delete a relationship (edge) from the knowledge graph.
+
+        Removes the specified fact/relationship between entities.
+        Connected entities are not affected.
+
+        Args:
+            edge_uuid: UUID of the relationship to delete
+            collection_name: Collection context
+
+        Returns:
+            Dict with deletion result:
+                - success: bool
+                - edge_uuid: The deleted edge UUID
+                - error: Optional error message
+
+        Raises:
+            RuntimeError: If not initialized
+            ValueError: If edge_uuid is invalid
+        """
+        if not self._builder:
+            raise RuntimeError("Client not initialized. Call initialize() first.")
+
+        if not edge_uuid or not isinstance(edge_uuid, str):
+            raise ValueError("edge_uuid must be a non-empty string")
+
+        return await self._builder.delete_edge(edge_uuid, collection_name)
+
+    async def delete_episode(
+        self,
+        episode_uuid: str,
+        collection_name: str = "default",
+    ) -> dict:
+        """Delete an entire episode (document) and its extracted data.
+
+        Removes all edges belonging to this episode, then deletes any
+        orphaned nodes (nodes with no remaining connections).
+
+        Args:
+            episode_uuid: UUID of the episode/document to delete
+            collection_name: Collection context
+
+        Returns:
+            Dict with deletion statistics:
+                - success: bool
+                - episode_uuid: The deleted episode UUID
+                - edges_deleted: Number of edges removed
+                - orphan_nodes_deleted: Number of orphaned nodes removed
+                - error: Optional error message
+
+        Raises:
+            RuntimeError: If not initialized
+            ValueError: If episode_uuid is invalid
+        """
+        if not self._builder:
+            raise RuntimeError("Client not initialized. Call initialize() first.")
+
+        if not episode_uuid or not isinstance(episode_uuid, str):
+            raise ValueError("episode_uuid must be a non-empty string")
+
+        return await self._builder.delete_episode(episode_uuid, collection_name)
+
+    async def delete_collection(
+        self,
+        collection_name: str,
+    ) -> dict:
+        """Delete entire collection with all its data.
+
+        ⚠️ DESTRUCTIVE OPERATION: Removes all entities and relationships
+        in the specified collection. This cannot be undone.
+
+        Args:
+            collection_name: Collection to delete
+
+        Returns:
+            Dict with deletion statistics:
+                - success: bool
+                - collection_name: Collection that was deleted
+                - edges_deleted: Number of edges removed
+                - nodes_deleted: Number of nodes removed
+                - error: Optional error message
+
+        Raises:
+            RuntimeError: If not initialized
+            ValueError: If collection_name is invalid
+        """
+        if not self._builder:
+            raise RuntimeError("Client not initialized. Call initialize() first.")
+
+        if not collection_name or not isinstance(collection_name, str):
+            raise ValueError("collection_name must be a non-empty string")
+
+        return await self._builder.delete_collection(collection_name)
 
     # ======================== Context Manager Support ========================
 

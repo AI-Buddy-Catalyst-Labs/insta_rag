@@ -41,6 +41,7 @@ class Neo4jGraphDriver:
         self.embedder = embedder
 
         self._graphiti: Optional[Graphiti] = None
+        self._neo4j_driver: Optional[Any] = None  # Store Neo4jDriver reference for deletion operations
 
     async def initialize(self) -> Graphiti:
         """Initialize and return Graphiti instance.
@@ -59,6 +60,9 @@ class Neo4jGraphDriver:
                 password=self.password,
                 database=self.database,
             )
+
+            # Store reference for use in deletion operations
+            self._neo4j_driver = driver
 
             # Create Graphiti instance with the driver and optional LLM/embedder clients
             graphiti_kwargs = {"graph_driver": driver}
@@ -88,6 +92,14 @@ class Neo4jGraphDriver:
             Graphiti instance if initialized, None otherwise.
         """
         return self._graphiti
+
+    def get_neo4j_driver(self) -> Optional[Any]:
+        """Get the Neo4j driver instance for raw query execution.
+
+        Returns:
+            Neo4jDriver instance if initialized, None otherwise.
+        """
+        return self._neo4j_driver
 
     async def __aenter__(self):
         """Async context manager entry."""

@@ -431,7 +431,69 @@ See [GRAPH_RAG_GROUP_ID_GUIDE.md](./GRAPH_RAG_GROUP_ID_GUIDE.md) for comprehensi
 | `await client.retrieve(query, collection_name, k)` | Search graph using hybrid semantic + BM25 |
 | `await client.retrieve_with_reranking(query, collection_name, center_node)` | Retrieve with distance-based reranking from center node |
 | `await client.get_entity_context(entity_name, collection_name, depth)` | Get entity and related facts (up to depth levels) |
+| `await client.delete_node(node_uuid, collection_name)` | Delete entity node and its connected relationships |
+| `await client.delete_edge(edge_uuid, collection_name)` | Delete relationship/fact between entities |
+| `await client.delete_episode(episode_uuid, collection_name)` | Delete document and orphaned entities |
+| `await client.delete_collection(collection_name)` | Delete entire collection (irreversible) |
 | `await client.close()` | Cleanup Neo4j connection |
+
+### Graph RAG Delete Operations (NEW)
+
+Delete data from your knowledge graph at multiple levels:
+
+#### Quick Delete Example
+
+```python
+async with GraphRAGClient() as client:
+    # Delete a single entity node
+    await client.delete_node(node_uuid, collection_name="company")
+
+    # Delete a relationship/fact
+    await client.delete_edge(edge_uuid, collection_name="company")
+
+    # Delete a document and orphaned entities
+    await client.delete_episode(episode_uuid, collection_name="company")
+
+    # Delete entire collection (with confirmation)
+    await client.delete_collection(collection_name="company")
+```
+
+#### Deletion Levels
+
+| Operation | Scope | Use Case |
+|-----------|-------|----------|
+| `delete_node()` | Single entity + edges | Remove specific entity |
+| `delete_edge()` | Single relationship | Remove specific fact |
+| `delete_episode()` | Document + orphaned nodes | Remove document and its data |
+| `delete_collection()` | All data in collection | Cleanup entire collection |
+
+#### REST API
+
+All delete operations are also available via REST endpoints:
+
+```bash
+# Delete node
+curl -X POST http://localhost:8000/graph-rag/delete-node \
+  -H "Content-Type: application/json" \
+  -d '{"node_uuid": "...", "collection_name": "company"}'
+
+# Delete edge
+curl -X POST http://localhost:8000/graph-rag/delete-edge \
+  -H "Content-Type: application/json" \
+  -d '{"edge_uuid": "...", "collection_name": "company"}'
+
+# Delete episode
+curl -X POST http://localhost:8000/graph-rag/delete-episode \
+  -H "Content-Type: application/json" \
+  -d '{"episode_uuid": "...", "collection_name": "company"}'
+
+# Delete collection (requires confirm=true)
+curl -X POST http://localhost:8000/graph-rag/delete-collection \
+  -H "Content-Type: application/json" \
+  -d '{"collection_name": "company", "confirm": true}'
+```
+
+See [GRAPH_RAG_DELETE_EPISODES.md](./GRAPH_RAG_DELETE_EPISODES.md) for comprehensive deletion guide.
 
 ### Graph RAG vs Vector RAG
 
@@ -443,6 +505,7 @@ See [GRAPH_RAG_GROUP_ID_GUIDE.md](./GRAPH_RAG_GROUP_ID_GUIDE.md) for comprehensi
 | **Entity Extraction** | Not explicit | LLM-driven, explicit |
 | **Use Cases** | General similarity search | Structured knowledge discovery |
 | **Best For** | Content search | Relationship queries |
+| **Deletion** | N/A | Full CRUD support |
 
 ---
 

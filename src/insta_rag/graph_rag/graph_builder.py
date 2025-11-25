@@ -19,15 +19,17 @@ class GraphBuilder:
     entity extraction, and relationship building.
     """
 
-    def __init__(self, graphiti_client: Graphiti, group_id: str = "default"):
+    def __init__(self, graphiti_client: Graphiti, group_id: str = "default", neo4j_driver=None):
         """Initialize GraphBuilder.
 
         Args:
             graphiti_client: Initialized Graphiti instance
             group_id: Group ID for organizing graph data
+            neo4j_driver: Optional Neo4j driver for raw query execution
         """
         self.graphiti = graphiti_client
         self.group_id = group_id
+        self.neo4j_driver = neo4j_driver
 
     async def add_documents(
         self,
@@ -216,24 +218,253 @@ class GraphBuilder:
             extracted_edges=edges,
         )
 
-    async def delete_collection(self, collection_name: str) -> int:
-        """Delete all episodes in a collection from the graph.
+    async def delete_node(
+        self,
+        node_uuid: str,
+        collection_name: str,
+    ) -> dict:
+        """Delete a single node (entity) and all its connected edges.
 
         Args:
-            collection_name: Collection name to delete
+            node_uuid: UUID of the entity node to delete
+            collection_name: Collection context (for reference)
 
         Returns:
-            Number of episodes deleted
+            Dict with keys:
+                - success: bool
+                - node_uuid: The deleted node UUID
+                - edges_deleted: Number of connected edges removed
+                - error: Optional error message
 
         Raises:
             RuntimeError: If operation fails
         """
-        # Note: Graphiti doesn't have a built-in delete by collection method
-        # This is a limitation we document for users
-        raise NotImplementedError(
-            "Collection deletion not yet implemented. "
-            "Please use Neo4j directly or reset the database."
-        )
+        try:
+            if not self.neo4j_driver:
+                return {"success": False, "error": "Neo4j driver not initialized"}
+
+            driver = self.neo4j_driver
+
+            # Verify node exists
+            node_query = "MATCH (n:Entity {uuid: $uuid}) RETURN n.uuid AS uuid"
+            records, _, _ = await driver.execute_query(node_query, uuid=node_uuid)
+
+            if not records:
+                return {
+                    "success": False,
+                    "error": f"Node {node_uuid} not found",
+                }
+
+            # Count connected edges before deletion
+            edge_count_query = (
+                "MATCH (n:Entity {uuid: $uuid})-[e]-(m) RETURN COUNT(e) AS edge_count"
+            )
+            edge_records, _, _ = await driver.execute_query(
+                edge_count_query, uuid=node_uuid
+            )
+            edge_count = edge_records[0]["edge_count"] if edge_records else 0
+
+            # Delete the node (DETACH DELETE removes all connected edges)
+            delete_query = "MATCH (n:Entity {uuid: $uuid}) DETACH DELETE n"
+            await driver.execute_query(delete_query, uuid=node_uuid)
+
+            return {
+                "success": True,
+                "node_uuid": node_uuid,
+                "edges_deleted": edge_count,
+                "message": f"Deleted node {node_uuid} and {edge_count} connected edges",
+            }
+
+        except Exception as e:
+            return {"success": False, "error": f"Failed to delete node: {str(e)}"}
+
+    async def delete_edge(
+        self,
+        edge_uuid: str,
+        collection_name: str,
+    ) -> dict:
+        """Delete a single edge (relationship/fact).
+
+        Args:
+            edge_uuid: UUID of the edge to delete
+            collection_name: Collection context (for reference)
+
+        Returns:
+            Dict with deletion status:
+                - success: bool
+                - edge_uuid: The deleted edge UUID
+                - error: Optional error message
+
+        Raises:
+            RuntimeError: If operation fails
+        """
+        try:
+            if not self.neo4j_driver:
+                return {"success": False, "error": "Neo4j driver not initialized"}
+
+            driver = self.neo4j_driver
+
+            # Verify edge exists (try multiple relationship types)
+            edge_query = "MATCH ()-[e {uuid: $uuid}]-() RETURN e.uuid AS uuid"
+            records, _, _ = await driver.execute_query(edge_query, uuid=edge_uuid)
+
+            if not records:
+                return {"success": False, "error": f"Edge {edge_uuid} not found"}
+
+            # Delete the edge
+            delete_query = "MATCH ()-[e {uuid: $uuid}]-() DELETE e"
+            await driver.execute_query(delete_query, uuid=edge_uuid)
+
+            return {
+                "success": True,
+                "edge_uuid": edge_uuid,
+                "message": f"Deleted edge {edge_uuid}",
+            }
+
+        except Exception as e:
+            return {"success": False, "error": f"Failed to delete edge: {str(e)}"}
+
+    async def delete_episode(
+        self,
+        episode_uuid: str,
+        collection_name: str,
+    ) -> dict:
+        """Delete an episode (document) and all its extracted entities/relationships.
+
+        Removes all edges belonging to this episode first, then deletes any
+        orphaned nodes (nodes with no remaining connections).
+
+        Args:
+            episode_uuid: UUID of the episode to delete
+            collection_name: Collection context
+
+        Returns:
+            Dict with deletion statistics:
+                - success: bool
+                - episode_uuid: The deleted episode UUID
+                - edges_deleted: Number of edges removed
+                - orphan_nodes_deleted: Number of orphaned nodes removed
+                - error: Optional error message
+
+        Raises:
+            RuntimeError: If operation fails
+        """
+        try:
+            if not self.neo4j_driver:
+                return {"success": False, "error": "Neo4j driver not initialized"}
+
+            driver = self.neo4j_driver
+            group_id = f"{self.group_id}_{collection_name}"
+
+            # Count edges to delete (edges with this episode in their episodes list)
+            edge_count_query = """
+            MATCH ()-[e {group_id: $group_id}]-()
+            WHERE $episode_uuid IN e.episodes
+            RETURN COUNT(e) AS edge_count
+            """
+            edge_records, _, _ = await driver.execute_query(
+                edge_count_query,
+                group_id=group_id,
+                episode_uuid=episode_uuid,
+            )
+            edge_count = edge_records[0]["edge_count"] if edge_records else 0
+
+            # Delete edges from this episode
+            delete_edges_query = """
+            MATCH ()-[e {group_id: $group_id}]-()
+            WHERE $episode_uuid IN e.episodes
+            DELETE e
+            """
+            await driver.execute_query(
+                delete_edges_query,
+                group_id=group_id,
+                episode_uuid=episode_uuid,
+            )
+
+            # Find orphaned nodes (nodes with no connected edges)
+            orphan_query = """
+            MATCH (n:Entity {group_id: $group_id})
+            WHERE NOT (n)-[]-()
+            RETURN COUNT(n) AS orphan_count
+            """
+            orphan_records, _, _ = await driver.execute_query(
+                orphan_query, group_id=group_id
+            )
+            orphan_count = orphan_records[0]["orphan_count"] if orphan_records else 0
+
+            # Delete orphaned nodes
+            delete_orphans_query = """
+            MATCH (n:Entity {group_id: $group_id})
+            WHERE NOT (n)-[]-()
+            DELETE n
+            """
+            await driver.execute_query(delete_orphans_query, group_id=group_id)
+
+            return {
+                "success": True,
+                "episode_uuid": episode_uuid,
+                "edges_deleted": edge_count,
+                "orphan_nodes_deleted": orphan_count,
+                "message": f"Deleted episode {episode_uuid}, {edge_count} edges, {orphan_count} orphaned nodes",
+            }
+
+        except Exception as e:
+            return {"success": False, "error": f"Failed to delete episode: {str(e)}"}
+
+    async def delete_collection(self, collection_name: str) -> dict:
+        """Delete entire collection with all documents, entities, and relationships.
+
+        Removes all edges first, then all nodes in the collection. This is a
+        destructive operation that cannot be undone.
+
+        Args:
+            collection_name: Collection to delete
+
+        Returns:
+            Dict with deletion statistics:
+                - success: bool
+                - collection_name: Collection that was deleted
+                - edges_deleted: Number of edges removed
+                - nodes_deleted: Number of nodes removed
+                - error: Optional error message
+
+        Raises:
+            RuntimeError: If operation fails
+        """
+        try:
+            if not self.neo4j_driver:
+                return {"success": False, "error": "Neo4j driver not initialized"}
+
+            driver = self.neo4j_driver
+            group_id = f"{self.group_id}_{collection_name}"
+
+            # Delete all edges in this collection first
+            delete_edges_query = "MATCH ()-[e {group_id: $group_id}]-() DELETE e"
+            result_edges = await driver.execute_query(
+                delete_edges_query, group_id=group_id
+            )
+            edges_affected = result_edges.summary.counters.relationships_deleted
+
+            # Delete all nodes in this collection
+            delete_nodes_query = "MATCH (n:Entity {group_id: $group_id}) DELETE n"
+            result_nodes = await driver.execute_query(
+                delete_nodes_query, group_id=group_id
+            )
+            nodes_affected = result_nodes.summary.counters.nodes_deleted
+
+            return {
+                "success": True,
+                "collection_name": collection_name,
+                "edges_deleted": edges_affected,
+                "nodes_deleted": nodes_affected,
+                "message": f"Deleted collection {collection_name}: {edges_affected} edges, {nodes_affected} nodes",
+            }
+
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"Failed to delete collection: {str(e)}",
+            }
 
     async def search_graph(
         self,
