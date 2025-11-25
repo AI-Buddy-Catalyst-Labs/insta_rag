@@ -284,6 +284,68 @@ Documents → Extract Content → Graphiti Processing → Neo4j Graph
 4. **LLM cost** – Entity extraction uses LLM calls; consider batching for large documents
 5. **Phase 1 feature** – Hybrid retrieval (merging graph + vector results) is planned for Phase 2
 
+### Custom Group ID for Multi-Tenant & Environment Isolation
+
+Graph RAG supports **custom group_id** for organizing data into separate, isolated namespaces. This is critical for:
+- **Multi-tenant applications** – Each tenant gets its own group_id
+- **Environment separation** – prod, staging, dev use different group_ids
+- **Data isolation** – Ensures no cross-tenant data leakage
+
+#### How It Works
+
+```python
+# group_id = Global namespace prefix (set once)
+# collection_name = Logical partition (passed per call)
+# Final Neo4j identifier = "{group_id}_{collection_name}"
+
+client = GraphRAGClient(group_id="acme_corp")
+await client.add_documents(docs, collection_name="employees")
+# Stored as: acme_corp_employees
+
+client2 = GraphRAGClient(group_id="widget_inc")
+await client2.add_documents(docs, collection_name="employees")
+# Stored as: widget_inc_employees
+# Completely isolated from acme_corp
+```
+
+#### Default Behavior
+
+```python
+# Default group_id: "insta_rag"
+client = GraphRAGClient()  # Uses group_id="insta_rag"
+
+# Always specify group_id for multi-tenant scenarios
+# Critical: Retrieval must use SAME group_id as insertion!
+await client.add_documents(docs, "collection", group_id="acme")
+await client.retrieve(query, "collection", group_id="acme")  # ✓ Correct
+await client.retrieve(query, "collection", group_id="other")  # ✗ Wrong - no results
+```
+
+#### API Parameter Support
+
+All Graph RAG API endpoints support custom group_id:
+
+```python
+# In testing_api
+POST /graph-rag/add-documents
+{
+  "documents": [...],
+  "collection_name": "employees",
+  "group_id": "my_company"  # Custom group_id
+}
+
+POST /graph-rag/retrieve
+{
+  "query": "...",
+  "collection_name": "employees",
+  "group_id": "my_company"  # Must match!
+}
+```
+
+**See also:**
+- [GRAPH_RAG_GROUP_ID_GUIDE.md](./GRAPH_RAG_GROUP_ID_GUIDE.md) – Comprehensive guide with examples
+- [GRAPH_RAG_INTEGRATION_GUIDE.md](./GRAPH_RAG_INTEGRATION_GUIDE.md) – Multi-tenant implementation patterns
+
 ## Async Processing & Celery (NEW)
 
 ### Overview
@@ -677,8 +739,10 @@ Note: Pre-commit hooks automatically manage `uv.lock` and `requirements.txt`.
 ### Implemented Features
 - ✅ **Vector RAG** – Semantic chunking, hybrid retrieval, HyDE, reranking
 - ✅ **Graph RAG** – Knowledge graph-based retrieval with Neo4j and Graphiti (Phase 1)
+- ✅ **Custom Group ID** – Multi-tenant support with isolated namespaces for Graph RAG
 - ✅ **Hybrid Storage** – Qdrant for vectors, MongoDB for content
 - ✅ **Async Processing** – Celery + Redis for non-blocking document ingestion and horizontal scaling
+- ✅ **Testing API** – Complete Graph RAG endpoints with Swagger documentation
 
 ### Roadmap (Phase 2+)
 - Graph RAG scoring – Implement semantic similarity + BM25 scoring for edges

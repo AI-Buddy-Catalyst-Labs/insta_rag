@@ -382,10 +382,50 @@ async def hybrid_retrieval():
         print(f"Graph results: {len(graph_results.edges)} facts")
 ```
 
+### Custom Group ID for Multi-Tenant Support
+
+Graph RAG supports **custom group_id** for organizing data into separate namespaces. Perfect for multi-tenant applications or different environments.
+
+```python
+# Default group_id: "insta_rag"
+client = GraphRAGClient()
+
+# Custom group_id for multi-tenant
+client = GraphRAGClient(group_id="acme_corp")  # For tenant Acme Corp
+client = GraphRAGClient(group_id="widget_inc") # For tenant Widget Inc
+client = GraphRAGClient(group_id="prod")       # For production environment
+```
+
+**How it works:**
+- **group_id** = Global namespace prefix (set once at client creation)
+- **collection_name** = Logical partition (passed per call)
+- **Final Neo4j Group** = `"{group_id}_{collection_name}"` (e.g., `"acme_corp_employees"`)
+
+**Multi-tenant example:**
+
+```python
+# Customer 1
+client1 = GraphRAGClient(group_id="acme_corp")
+await client1.add_documents(docs, collection_name="knowledge_base")
+# Stored as: "acme_corp_knowledge_base"
+
+# Customer 2 (completely isolated)
+client2 = GraphRAGClient(group_id="widget_inc")
+await client2.add_documents(docs, collection_name="knowledge_base")
+# Stored as: "widget_inc_knowledge_base"
+
+# Retrieve only customer data
+results1 = await client1.retrieve("query", collection_name="knowledge_base")  # Only acme_corp data
+results2 = await client2.retrieve("query", collection_name="knowledge_base")  # Only widget_inc data
+```
+
+See [GRAPH_RAG_GROUP_ID_GUIDE.md](./GRAPH_RAG_GROUP_ID_GUIDE.md) for comprehensive examples and [GRAPH_RAG_INTEGRATION_GUIDE.md](./GRAPH_RAG_INTEGRATION_GUIDE.md) for production deployment patterns.
+
 ### Graph RAG API Reference
 
 | Method | Purpose |
 |--------|---------|
+| `GraphRAGClient(group_id="insta_rag")` | Create client with custom namespace prefix |
 | `await client.initialize()` | Connect to Neo4j and setup indices |
 | `await client.add_documents(docs, collection_name)` | Extract entities/relationships and add to graph |
 | `await client.retrieve(query, collection_name, k)` | Search graph using hybrid semantic + BM25 |
@@ -617,13 +657,22 @@ insta-rag ask --collection my_docs --query "What is the refund window?"
 
 ## Guides & Docs
 
+### Vector RAG Documentation
 - **Installation Guide** – Python versions, optional extras, uv vs pip
 - **Quickstart** – end‑to‑end in 5 minutes
 - **Document Management** – ingestion patterns, chunking strategies
 - **Advanced Retrieval** – hybrid knobs, HyDE, reranking, filters
 - **Storage Backends** – Qdrant setup, MongoDB sizing tips
 
-> Looking for something specific? See the **Full Documentation** (link your site here).
+### Graph RAG Documentation
+- **[GRAPH_RAG_GROUP_ID_GUIDE.md](./GRAPH_RAG_GROUP_ID_GUIDE.md)** – Custom group_id for multi-tenant support, organization strategies, and best practices
+- **[GRAPH_RAG_INTEGRATION_GUIDE.md](./GRAPH_RAG_INTEGRATION_GUIDE.md)** – Complete integration guide with Celery, Neo4j, Redis, and production deployment patterns
+
+### Project Documentation
+- **[CLAUDE.md](./CLAUDE.md)** – Claude Code guidelines and project structure
+- **[CONTRIBUTING.md](./CONTRIBUTING.md)** – Contribution guidelines and development setup
+
+> Looking for something specific? Check the guides above or start with the **Quick Start** section.
 
 ---
 
